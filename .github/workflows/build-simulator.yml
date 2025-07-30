@@ -1,0 +1,58 @@
+name: Build iOS Simulator App
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  build-for-simulator:
+    runs-on: macos-latest
+
+    steps:
+      # 1. Checkout code
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      # 2. Setup Node.js
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+
+      # 3. Install dependencies
+      - name: Install Dependencies
+        run: |
+          npm ci || npm install
+
+      # 4. Install Capacitor CLI (just in case)
+      - name: Ensure Capacitor CLI Installed
+        run: npm install @capacitor/cli
+
+      # 5. Build web assets (skip if you're using pure HTML)
+      - name: Copy web files (if needed)
+        run: |
+          mkdir -p www
+          cp index.html www/index.html || true
+
+      # 6. Sync Capacitor
+      - name: Sync Capacitor iOS
+        run: npx cap sync ios
+
+      # 7. Build iOS Simulator app using xcodebuild
+      - name: Build for iOS Simulator
+        run: |
+          cd ios/App
+          xcodebuild \
+            -scheme App \
+            -sdk iphonesimulator \
+            -configuration Debug \
+            -derivedDataPath build
+
+      # 8. Upload the unsigned .app bundle
+      - name: Upload .app Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-simulator-app
+          path: ios/App/build/Build/Products/Debug-iphonesimulator/App.app
