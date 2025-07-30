@@ -4,56 +4,73 @@ on:
   push:
     branches:
       - main
+  workflow_dispatch:
 
 jobs:
   build-for-simulator:
     runs-on: macos-latest
 
     steps:
-      # 1. Checkout the repository
+      # 1. Checkout code
       - name: Checkout Code
         uses: actions/checkout@v4
 
-      # 2. Setup Node.js 20 (required by Capacitor v5)
+      # 2. Setup Node.js (Capacitor v5 requires Node.js >= 20)
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: '20'
           cache: 'npm'
 
-      # 3. Install npm dependencies
-      - name: Install Dependencies
+      # 3. Install dependencies
+      - name: Install npm dependencies
         run: npm ci || npm install
 
       # 4. Ensure Capacitor CLI is installed
       - name: Install Capacitor CLI
         run: npm install @capacitor/cli
 
-      # 5. Create www folder if missing (for static HTML/CSS apps)
-      - name: Ensure www folder exists
+      # 5. Ensure www folder exists with basic HTML (for static sites)
+      - name: Ensure www folder and HTML exist
         run: |
           mkdir -p www
           if [ ! -f www/index.html ]; then
             echo '<!DOCTYPE html><html><head><title>Hello</title></head><body><h1>Hello Capacitor</h1></body></html>' > www/index.html
           fi
 
-      # 6. Sync Capacitor with iOS platform
+      # 6. Sync Capacitor with iOS
       - name: Sync Capacitor iOS
         run: npx cap sync ios
 
-      # 7. Build the iOS app for Simulator
+      # 7. Install CocoaPods dependencies (required for build)
+      - name: Install CocoaPods
+        run: |
+          cd ios/App
+          pod install
+
+      # 8. Build the iOS app for Simulator and save logs
       - name: Build iOS App for Simulator
         run: |
           cd ios/App
           xcodebuild \
+            -workspace App.xcworkspace \
             -scheme App \
             -sdk iphonesimulator \
             -configuration Debug \
-            -derivedDataPath build
+            -derivedDataPath build \
+            | tee xcodebuild.log | xcpretty
+        continue-on-error: true
 
-      # 8. Upload the .app bundle as artifact
+      # 9. Upload the .app bundle as a downloadable artifact
       - name: Upload .app Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ios-simulator-app
           path: ios/App/build/Build/Products/Debug-iphonesimulator/App.app
+
+      # 10. Upload Xcode build logs
+      - name: Upload Build Log
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: ios/App/xcodebuild.log
